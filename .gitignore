@@ -3,7 +3,3 @@ dataset/
 __pycache__/
 *.pdf
 .ipynb_checkpoints/
-*.pt
-*.keras
-*.pkl
-models/
