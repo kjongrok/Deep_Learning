@@ -1,8 +1,8 @@
-streamlit==1.58.0
+streamlit
 opencv-python-headless
-numpy==2.2.6
-pandas==2.3.3
-joblib==1.5.3
-ultralytics==8.4.81
-tensorflow==2.21.0
-supabase==2.31.0
+numpy
+pandas
+joblib
+ultralytics
+tensorflow
+supabase
