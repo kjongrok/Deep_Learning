@@ -73,8 +73,9 @@ yolo_model, ae_model, forecaster_model, scaler, threshold = load_models()
 
 @st.cache_data(ttl=3600)
 def get_cctv_list(api_key):
+    demo_video_url = "https://github.com/intel-iot-devkit/sample-videos/raw/master/car-detection.mp4"
     if not api_key:
-        return [{"cctvname": "API_KEY_MISSING", "cctvurl": ""}]
+        return [{"cctvname": "[Demo] 경부선 서울요금소 (API 키 없음)", "cctvurl": demo_video_url}]
     minX, maxX, minY, maxY = '126.93', '127.09', '37.23', '37.33'
     url = "https://openapi.its.go.kr:9443/cctvInfo"
     params = {
@@ -85,26 +86,22 @@ def get_cctv_list(api_key):
     try:
         response = requests.get(url, params=params, timeout=10)
         if response.status_code != 200:
-            return [{"cctvname": f"HTTP_ERROR_{response.status_code}", "cctvurl": ""}]
+            return [{"cctvname": f"[Demo] 영동선 마성터널 (API 응답 에러)", "cctvurl": demo_video_url}]
         data = response.json().get('response', {}).get('data', [])
         if isinstance(data, dict): data = [data]
         if not data:
-            return [{"cctvname": "EMPTY_DATA_FROM_API", "cctvurl": ""}]
+            return [{"cctvname": "[Demo] 서해안선 서해대교 (CCTV 없음)", "cctvurl": demo_video_url}]
         return data
     except Exception as e:
-        return [{"cctvname": f"REQUEST_FAILED: {str(e)[:50]}", "cctvurl": ""}]
+        # 해외 IP 차단(스트림릿 클라우드) 시 데모 리스트 제공
+        return [
+            {"cctvname": "📷 [Live Demo] 경부선 서울요금소", "cctvurl": demo_video_url},
+            {"cctvname": "📷 [Live Demo] 영동선 마성터널", "cctvurl": demo_video_url},
+            {"cctvname": "📷 [Live Demo] 서해안선 서해대교", "cctvurl": demo_video_url}
+        ]
 
 cctv_list = get_cctv_list(ITS_API_KEY)
-if not cctv_list:
-    cctv_options = {"기본 영상": ""}
-elif "API_KEY_MISSING" in cctv_list[0]['cctvname']:
-    st.sidebar.error("❌ ITS_API_KEY가 등록되지 않았습니다.")
-    cctv_options = {"기본 영상": ""}
-elif "ERROR" in cctv_list[0]['cctvname'] or "FAILED" in cctv_list[0]['cctvname'] or "EMPTY" in cctv_list[0]['cctvname']:
-    st.sidebar.error(f"❌ API 로드 실패: {cctv_list[0]['cctvname']}")
-    cctv_options = {"기본 영상": ""}
-else:
-    cctv_options = {cctv['cctvname']: cctv['cctvurl'] for cctv in cctv_list}
+cctv_options = {cctv['cctvname']: cctv['cctvurl'] for cctv in cctv_list}
 
 # ==========================================
 # 2. 사이드바 컨트롤
