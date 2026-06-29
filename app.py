@@ -23,16 +23,25 @@ st.set_page_config(page_title="AI_1team 관제 대시보드", layout="wide", pag
 # 환경변수 로드
 load_dotenv()
 ITS_API_KEY = os.getenv("ITS_API_KEY")
-if ITS_API_KEY is None and "ITS_API_KEY" in st.secrets:
-    ITS_API_KEY = st.secrets["ITS_API_KEY"]
+try:
+    if not ITS_API_KEY and "ITS_API_KEY" in st.secrets:
+        ITS_API_KEY = st.secrets["ITS_API_KEY"]
+except Exception:
+    pass
 
 SUPABASE_URL = os.getenv("SUPABASE_URL")
-if SUPABASE_URL is None and "SUPABASE_URL" in st.secrets:
-    SUPABASE_URL = st.secrets["SUPABASE_URL"]
+try:
+    if not SUPABASE_URL and "SUPABASE_URL" in st.secrets:
+        SUPABASE_URL = st.secrets["SUPABASE_URL"]
+except Exception:
+    pass
 
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
-if SUPABASE_KEY is None and "SUPABASE_KEY" in st.secrets:
-    SUPABASE_KEY = st.secrets["SUPABASE_KEY"]
+try:
+    if not SUPABASE_KEY and "SUPABASE_KEY" in st.secrets:
+        SUPABASE_KEY = st.secrets["SUPABASE_KEY"]
+except Exception:
+    pass
 
 supabase = None
 if SUPABASE_URL and SUPABASE_KEY:
