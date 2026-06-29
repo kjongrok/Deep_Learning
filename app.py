@@ -63,11 +63,13 @@ def load_models():
 yolo_model, ae_model, forecaster_model, scaler, threshold = load_models()
 
 @st.cache_data(ttl=3600)
-def get_cctv_list():
+def get_cctv_list(api_key):
+    if not api_key:
+        return []
     minX, maxX, minY, maxY = '126.93', '127.09', '37.23', '37.33'
     url = "https://openapi.its.go.kr:9443/cctvInfo"
     params = {
-        'apiKey': ITS_API_KEY, 'type': 'ex', 'cctvType': '1',
+        'apiKey': api_key, 'type': 'ex', 'cctvType': '1',
         'minX': minX, 'maxX': maxX, 'minY': minY, 'maxY': maxY,
         'getType': 'json'
     }
@@ -79,7 +81,7 @@ def get_cctv_list():
     except Exception:
         return []
 
-cctv_list = get_cctv_list()
+cctv_list = get_cctv_list(ITS_API_KEY)
 cctv_options = {cctv['cctvname']: cctv['cctvurl'] for cctv in cctv_list} if cctv_list else {"기본 영상": ""}
 
 # ==========================================
