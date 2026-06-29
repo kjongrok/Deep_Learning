@@ -8,3 +8,4 @@ tensorflow
 supabase
 python-dotenv
 requests
+scikit-learn
