@@ -6,3 +6,5 @@ joblib
 ultralytics
 tensorflow
 supabase
+python-dotenv
+requests
