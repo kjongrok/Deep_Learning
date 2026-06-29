@@ -251,13 +251,20 @@ with tab1:
 # Tab 2: 과거 학습 시뮬레이션 (Offline)
 # ------------------------------------------
 with tab2:
-    st.subheader("🎬 모델 훈련에 사용된 원본 데이터셋 기반 오프라인 시뮬레이션")
-    st.markdown("라이브 스트리밍이 아닌, 모델을 훈련할 때 썼던 로컬 데이터를 바탕으로 모델이 얼마나 정확하게 판단하는지 끊김 없이 보여줍니다.")
+    st.subheader("📊 모델 훈련에 사용된 원본 데이터셋 기반 오프라인 시뮬레이션")
+    st.markdown("실시간 스트리밍이 아닌, **실제 모델을 훈련시킬 때 사용했던 로컬 데이터셋(dataset 폴더)** 영상을 바탕으로 AI가 어떻게 판단하는지 시연합니다.")
     
     sim_col1, sim_col2 = st.columns([1, 2])
     with sim_col1:
-        st.markdown("로컬에 있는 아무 블랙박스/CCTV 영상(mp4)이나 업로드 해보세요!")
-        uploaded_video = st.file_uploader("🎥 시뮬레이션 비디오 업로드", type=['mp4', 'avi'])
+        # dataset 폴더 내의 비디오 파일 검색
+        dataset_videos = glob.glob(r'dataset\*.mp4') + glob.glob(r'dataset\*\*.mp4')
+        if not dataset_videos:
+            st.warning("⚠️ `dataset` 폴더에 mp4 비디오 파일이 없습니다.")
+            selected_sim_video = None
+        else:
+            video_options = {os.path.basename(v): v for v in dataset_videos}
+            selected_video_name = st.selectbox("📂 학습 데이터 비디오 선택", list(video_options.keys()))
+            selected_sim_video = video_options[selected_video_name]
         
         start_sim = st.button("▶️ 시뮬레이션 시작 (Click)")
         stop_sim = st.button("⏹️ 중지")
@@ -269,31 +276,36 @@ with tab2:
         st.session_state.sim_running = False
         
     if start_sim:
-        if uploaded_video is None:
-            sim_status.error("먼저 비디오 파일을 업로드 해주세요!")
+        if not selected_sim_video:
+            sim_status.error("먼저 비디오 파일을 준비해주세요!")
         else:
             st.session_state.sim_running = True
-            # 업로드된 파일을 임시 저장
-            with open("temp_sim_video.mp4", "wb") as f:
-                f.write(uploaded_video.read())
-                
+            
     if stop_sim:
         st.session_state.sim_running = False
         
-    if st.session_state.sim_running:
-        cap_sim = cv2.VideoCapture("temp_sim_video.mp4")
+    if st.session_state.sim_running and selected_sim_video:
+        cap_sim = cv2.VideoCapture(selected_sim_video)
         if not cap_sim.isOpened():
-            sim_status.error("비디오를 읽을 수 없습니다.")
+            sim_status.error("비디오를 열 수 없습니다.")
             st.session_state.sim_running = False
         else:
-            sim_status.success("시뮬레이션 영상 분석 중...")
-            while st.session_state.sim_running:
+            sim_status.success(f"시뮬레이션 가동 중: {os.path.basename(selected_sim_video)}")
+            frame_skip = 5
+            frame_count = 0
+            
+            while cap_sim.isOpened() and st.session_state.sim_running:
                 ret, img = cap_sim.read()
-                if not ret:
-                    break # 영상 끝
-                    
+                if not ret: break
+                
+                frame_count += 1
+                if frame_count % frame_skip != 0: continue
+                
+                # 원본 비율 유지하면서 리사이징 (연산량 감소)
+                img = cv2.resize(img, (640, 360))
                 img_area = img.shape[0] * img.shape[1]
-                # 동적 튜닝 생략 (업로드 영상이므로 기본 0.25 사용)
+                
+                # YOLOv8 차량 탐지
                 results = yolo_model(img, classes=[2, 5, 7], conf=0.25, verbose=False)
                 boxes = results[0].boxes
                 
