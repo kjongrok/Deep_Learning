@@ -158,12 +158,21 @@ with tab1:
             frame_skip = 10 
             frame_idx = 0
             last_log_time = 0
+            retry_count = 0
             
             while run_stream:
                 ret, img = cap.read()
                 if not ret:
+                    retry_count += 1
+                    if retry_count > 10:  # 약 5초간 응답 없으면 재연결 시도
+                        status_placeholder.warning("🔄 스트리밍 연결이 지연/끊겼습니다. 자동 재연결을 시도합니다...")
+                        cap.release()
+                        cap = cv2.VideoCapture(selected_cctv_url)
+                        retry_count = 0
                     time.sleep(0.5)
                     continue
+                else:
+                    retry_count = 0
                     
                 frame_idx += 1
                 if frame_idx % frame_skip != 0:
@@ -199,16 +208,49 @@ with tab1:
                 
                 features_scaled_lstm = features_scaled.reshape(1, 1, 4)
                 reconstructed = ae_model.predict(features_scaled_lstm, verbose=0)
-                mse = np.mean(np.square(features_scaled_lstm - reconstructed), axis=(1, 2))[0]
+                raw_mse = np.mean(np.square(features_scaled_lstm - reconstructed), axis=(1, 2))[0]
+                
+                # Apply Exponential Moving Average (EMA) to smooth out flickering
+                if 'smoothed_mse' not in st.session_state:
+                    st.session_state.smoothed_mse = raw_mse
+                else:
+                    alpha = 0.3 # 30% current, 70% previous (smoothing factor)
+                    st.session_state.smoothed_mse = (alpha * raw_mse) + ((1 - alpha) * st.session_state.smoothed_mse)
+                    
+                mse = st.session_state.smoothed_mse
                 
                 is_anomaly = mse > threshold
                 if (car_count + bus_count + truck_count) < 5:
                     is_anomaly = False
                     
-                predicted_density_scaled = forecaster_model.predict(features_scaled_lstm, verbose=0)[0][0]
-                dummy_array = np.zeros((1, 4))
-                dummy_array[0, 3] = predicted_density_scaled
-                predicted_density_real = scaler.inverse_transform(dummy_array)[0, 3]
+                # 1. Multi-step Auto-Regressive Forecasting (5 steps)
+                if 'prev_features' not in st.session_state:
+                    st.session_state.prev_features = features_scaled_lstm.copy()
+                
+                # Calculate feature momentum (how fast cars/buses are increasing)
+                delta_features = features_scaled_lstm - st.session_state.prev_features
+                st.session_state.prev_features = features_scaled_lstm.copy()
+                
+                future_steps = 5
+                current_features = features_scaled_lstm.copy()
+                future_predictions = []
+                
+                for _ in range(future_steps):
+                    pred_scaled = forecaster_model.predict(current_features, verbose=0)[0][0]
+                    dummy_array = np.zeros((1, 4))
+                    dummy_array[0, 3] = pred_scaled
+                    pred_real = scaler.inverse_transform(dummy_array)[0, 3]
+                    pred_real = max(0.0, pred_real) # prevent negative density
+                    future_predictions.append(pred_real)
+                    
+                    # Update density and apply momentum to vehicles for next step
+                    current_features[0, 0, 3] = pred_scaled
+                    current_features[0, 0, 0] += delta_features[0, 0, 0] * 0.5  # car
+                    current_features[0, 0, 1] += delta_features[0, 0, 1] * 0.5  # bus
+                    current_features[0, 0, 2] += delta_features[0, 0, 2] * 0.5  # truck
+                    current_features = np.maximum(current_features, 0) # prevent negative inputs
+                    
+                predicted_density_real = future_predictions[0]
 
                 current_time = time.time()
                 if current_time - last_log_time >= 1.0:
@@ -222,24 +264,48 @@ with tab1:
                 metric_car.metric("승용차", f"{car_count} 대")
                 metric_bus.metric("버스", f"{bus_count} 대")
                 metric_truck.metric("트럭", f"{truck_count} 대")
-                metric_density.metric("혼잡도(Density)", f"{density:.4f}")
                 
+                # Delta UI
+                future_t5 = future_predictions[-1]
+                delta_val = future_t5 - density
+                metric_density.metric("혼잡도(Density)", f"{density:.4f}", delta=f"{delta_val:+.4f} (미래예측)", delta_color="inverse")
+                
+                # Early Warning UI
+                max_future_density = max(future_predictions)
                 if is_anomaly:
-                    status_placeholder.error(f"🚨 ANOMALY DETECTED! (MSE: {mse:.4f})")
+                    status_placeholder.error(f"🚨 [이상 탐지] 현재 교통 흐름에 이상이 감지되었습니다! (오차율: {mse:.4f})")
+                elif max_future_density > 0.15: # 시연용으로 임계값을 0.4 -> 0.15로 낮춤
+                    status_placeholder.warning(f"⚠️ [예측 경보] 잠시 후 교통 혼잡이 예상됩니다! (최대 밀집도: {max_future_density:.4f})")
                 else:
-                    status_placeholder.success(f"✅ NORMAL TRAFFIC (MSE: {mse:.4f})")
+                    status_placeholder.success(f"✅ [정상] 원활한 교통 흐름을 보이고 있습니다. (오차율: {mse:.4f})")
                     
                 img_drawn_resized = cv2.resize(img_drawn, (800, 450))
                 img_rgb = cv2.cvtColor(img_drawn_resized, cv2.COLOR_BGR2RGB)
                 video_placeholder.image(img_rgb, channels="RGB", width="stretch")
                 
-                new_row = pd.DataFrame({
-                    "Time": [time.strftime("%H:%M:%S")],
-                    "Actual": [density],
-                    "Predicted": [predicted_density_real]
-                })
+                # Future Trajectory Chart
+                current_time_str = time.strftime("%H:%M:%S")
+                new_row = pd.DataFrame({"Time": [current_time_str], "Actual": [density]})
+                
+                # Reset old history_df if it has the "Predicted" column
+                if 'history_df' not in st.session_state or 'Predicted' in st.session_state.history_df.columns:
+                    st.session_state.history_df = pd.DataFrame(columns=["Time", "Actual"])
+                    
                 st.session_state.history_df = pd.concat([st.session_state.history_df, new_row]).tail(30)
-                chart_data = st.session_state.history_df.set_index("Time")
+                
+                display_df = st.session_state.history_df.copy()
+                display_df["Predicted"] = np.nan
+                
+                if len(display_df) > 0:
+                    display_df.iloc[-1, display_df.columns.get_loc("Predicted")] = density
+                    
+                future_rows = []
+                for i, pred_val in enumerate(future_predictions):
+                    f_time_str = time.strftime("%H:%M:%S", time.localtime(current_time + (i+1)))
+                    future_rows.append({"Time": f_time_str, "Actual": np.nan, "Predicted": pred_val})
+                    
+                display_df = pd.concat([display_df, pd.DataFrame(future_rows)])
+                chart_data = display_df.set_index("Time")
                 chart_placeholder.line_chart(chart_data, color=["#1E90FF", "#FF4B4B"])
                 
                 time.sleep(0.01)
@@ -410,7 +476,7 @@ with tab4:
                 res = supabase.table("traffic_logs").select("*").order("id", desc=True).limit(50).execute()
                 if res.data:
                     df_logs = pd.DataFrame(res.data)
-                    st.dataframe(df_logs, use_container_width=True)
+                    st.dataframe(df_logs, width="stretch")
                 else:
                     st.warning("데이터베이스에 아직 로그가 없습니다.")
             except Exception as e:
@@ -436,7 +502,7 @@ with tab5:
                 with col_eda1:
                     st.markdown("#### 📝 차량 종류별 기초 통계량 (DB 평균)")
                     stats = df_eda[['car_count', 'bus_count', 'truck_count']].mean().rename("평균 대수 (프레임당)")
-                    st.dataframe(stats, use_container_width=True)
+                    st.dataframe(stats, width="stretch")
                     st.caption(f"클라우드에 누적된 {len(df_eda)}개의 데이터를 분석한 결과, 승용차의 비중이 압도적으로 높음을 확인했습니다.")
                     
                 with col_eda2:

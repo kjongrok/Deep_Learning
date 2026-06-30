@@ -9,3 +9,13 @@ supabase
 python-dotenv
 requests
 scikit-learn
+matplotlib
+seaborn
+scipy
+statsmodels
+wordcloud
+pymysql
+gradio
+langchain-community
+ydata-profiling
+sqlalchemy
