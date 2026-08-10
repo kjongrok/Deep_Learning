@@ -20,6 +20,32 @@
 
 ![교통 관제 MLOps 아키텍처와 실시간 클라우드 로그](docs/images/mlops-architecture.png)
 
+## 보고서 핵심 분석
+
+### 실시간 객체 탐지 모델 비교
+
+![YOLOv8 모델별 처리 속도와 차량 탐지 결과 비교](docs/images/report/yolo-benchmark.png)
+
+YOLOv8 Nano·Small·Medium을 동일 영상에서 비교해 탐지 수와 처리 속도의 균형을 확인했습니다. 실시간 관제에서는 가장 높은 정확도만이 아니라 CCTV 스트림을 끊김 없이 처리할 수 있는 추론 효율도 모델 선정 기준에 포함했습니다.
+
+### LSTM Autoencoder 구조 선정
+
+![LSTM Autoencoder 은닉 노드 구성 비교](docs/images/report/lstm-selection.png)
+
+은닉 노드 수가 다른 LSTM Autoencoder를 비교해 이상 탐지 성능과 모델 복잡도의 균형점을 찾았습니다. 최종 구성은 시계열 패턴을 충분히 학습하면서도 실시간 추론 부담을 억제하는 방향으로 선정했습니다.
+
+### 이상 탐지 성능 검증
+
+![교통 이상 탐지 모델 ROC와 AUC 비교](docs/images/report/roc-auc-comparison.png)
+
+K-Means, MLP Autoencoder, LSTM Autoencoder를 ROC와 AUC 관점에서 비교했습니다. 시간 순서에 따른 변화까지 반영하는 LSTM Autoencoder가 관제 데이터의 이상 패턴을 구분하는 데 가장 적합한지 정량적으로 검증했습니다.
+
+### 데이터 파이프라인 개선
+
+![대용량 데이터 처리와 Supabase 연동 트러블슈팅](docs/images/report/pipeline-troubleshooting.png)
+
+대용량 CSV와 로그를 로컬 메모리에서 반복 처리할 때 발생한 병목을 Supabase 중심의 저장·조회 구조로 개선했습니다. 이를 통해 추론, 로그 적재, 누적 분석이 하나의 관제 흐름으로 연결되도록 구성했습니다.
+
 ## 핵심 기능
 
 - ITS 공공데이터 API 기반 CCTV 목록 및 스트림 조회
