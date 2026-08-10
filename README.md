@@ -2,6 +2,10 @@
 
 실시간 CCTV 영상에서 차량을 탐지하고, 교통 밀집도와 시계열 패턴을 분석해 이상 상황과 미래 혼잡을 예측하는 개인 딥러닝 프로젝트입니다. Streamlit 대시보드, Supabase 로깅, 공공 CCTV API를 결합해 실시간 관제 흐름을 구현합니다.
 
+## 시연 영상
+
+[![교통 이상 탐지 및 예측 프로젝트 시연 영상](docs/images/demo-video-thumbnail.png)](https://youtu.be/33S2lS5M61c)
+
 ## 실행 화면
 
 ### 실시간 CCTV 차량 탐지와 밀집도 예측
